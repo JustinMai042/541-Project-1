@@ -78,25 +78,7 @@ country_profile <- function(data, group_var1, group_var2, min_audits = 10) {
 }
 
 
-country_profile(plastics, country, year, min_audits = 200) 
-```
-
-```{r}
-plastic_cols <- c("hdpe", "ldpe", "o", "pet", "pp", "ps", "pvc")
-
-type_summary <- map_dfr(plastic_cols, function(col) {
-  tibble(
-    plastic_type = col,
-    total_count = sum(plastics[[col]]),
-    mean_count = mean(plastics[[col]]),
-    median_count = median(plastics[[col]]),
-    iqr = IQR(plastics[[col]]),
-    audits_with_plastic = sum(plastics[[col]] > 0)
-  )
-}) |>
-  arrange(desc(total_count))
-
-type_summary
+country_profile(plastics, country, year, min_audits = 1) 
 ```
 
 ```{r}
