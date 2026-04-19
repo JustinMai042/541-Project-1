@@ -1,0 +1,82 @@
+---
+title: "API"
+format: html
+editor: visual
+---
+
+```{r}
+library(httr)
+library(jsonlite)
+
+url <- "https://api.footprintnetwork.org/v1/types"
+user_name <- "username"
+api_key <- "1gs79s099C3TboOH32857V43Bur6rQssvLHAjF9e5B0GB23I65V6"
+
+response <- GET(
+  url,
+  authenticate(user = user_name, password = api_key, type = "basic"),
+  add_headers(Accept = "application/json")
+)
+
+response
+```
+
+```{r}
+codes <- c("BCpc", "BCtot", "EFCpc", "EFCtot", "earth", "pop", "hdi", "gdp")
+```
+
+```{r}
+
+url_2019 <- "https://api.footprintnetwork.org/v1/data/all/2019/all"
+url_2020 <- "https://api.footprintnetwork.org/v1/data/all/2020/all"
+
+res_2019 <- GET(
+  url_2019,
+  authenticate(user_name, api_key, type = "basic"),
+  add_headers(Accept = "application/json")
+)
+
+res_2020 <- GET(
+  url_2020,
+  authenticate(user_name, api_key, type = "basic"),
+  add_headers(Accept = "application/json")
+)
+
+
+
+data_2019 <- fromJSON(rawToChar(res_2019$content))
+data_2020 <- fromJSON(rawToChar(res_2020$content))
+
+all_data <- bind_rows(data_2019,data_2020)
+all_data
+  
+```
+
+```{r}
+wide_data <- all_data |>
+  select(year, countryName, isoa2, record, value) |>
+    pivot_wider(
+    names_from = record,
+    values_from = value
+    ) |>
+  rename(country = countryName)
+  
+
+
+```
+
+```{r}
+left_join(plastics, wide_data, by = c("country", "year"))
+```
+
+```{r}
+url_china_hdi_2020 <- "https://api.footprintnetwork.org/v1/data/41/2020/hdi"
+res <- GET(
+  url_china_hdi_2020,
+  authenticate(user_name, api_key, type = "basic"),
+  add_headers(Accept = "application/json")
+)
+
+china_hdi_2020 <- fromJSON(rawToChar(res$content))
+china_hdi_2020
+```
