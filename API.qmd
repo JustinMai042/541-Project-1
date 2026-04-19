@@ -120,17 +120,17 @@ summary_country_year |>
     year = "Year",
     total_plastic = "Total Plastic Items Collected",
     avg_plastic = "Average Plastic Items Collected",
-    avg_footprint = "Ecological Footprint per Capita",
-    avg_biocapacity = "Biocapacity per Capita",
-    avg_hdi = "HDI",
-    total_population = "Population"
+    footprint_per_capita = "Ecological Footprint per Capita",
+    biocapacity_per_capita = "Biocapacity per Capita",
+    hdi = "HDI",
+    population = "Population"
   ) |>
   fmt_number(
-    columns = c(total_plastic, avg_plastic, total_population),
+    columns = c(total_plastic, avg_plastic, population),
     decimals = 0
   ) |>
   fmt_number(
-    columns = c(avg_footprint, avg_biocapacity, avg_hdi),
+    columns = c( footprint_per_capita, biocapacity_per_capita, hdi),
     decimals = 2
   )
 ```
