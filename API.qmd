@@ -7,11 +7,12 @@ editor: visual
 ```{r}
 library(httr)
 library(jsonlite)
+plastics <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2021/2021-01-26/plastics.csv')
 
 url <- "https://api.footprintnetwork.org/v1/types"
 user_name <- "username"
 api_key <- "1gs79s099C3TboOH32857V43Bur6rQssvLHAjF9e5B0GB23I65V6"
-
+#checkin
 response <- GET(
   url,
   authenticate(user = user_name, password = api_key, type = "basic"),
@@ -22,34 +23,20 @@ response
 ```
 
 ```{r}
-codes <- c("BCpc", "BCtot", "EFCpc", "EFCtot", "earth", "pop", "hdi", "gdp")
-```
+years <- c(2019, 2020)
 
-```{r}
-
-url_2019 <- "https://api.footprintnetwork.org/v1/data/all/2019/all"
-url_2020 <- "https://api.footprintnetwork.org/v1/data/all/2020/all"
-
-res_2019 <- GET(
-  url_2019,
-  authenticate(user_name, api_key, type = "basic"),
-  add_headers(Accept = "application/json")
-)
-
-res_2020 <- GET(
-  url_2020,
-  authenticate(user_name, api_key, type = "basic"),
-  add_headers(Accept = "application/json")
-)
-
-
-
-data_2019 <- fromJSON(rawToChar(res_2019$content))
-data_2020 <- fromJSON(rawToChar(res_2020$content))
-
-all_data <- bind_rows(data_2019,data_2020)
-all_data
+all_data <- lapply(years, function(y) {
+  url <- paste0("https://api.footprintnetwork.org/v1/data/all/", y, "/all")
   
+  res <- GET(
+    url,
+    authenticate(user_name, api_key, type = "basic"),
+    add_headers(Accept = "application/json")
+  )
+  
+fromJSON(rawToChar(res$content))
+  }) |>
+  bind_rows()
 ```
 
 ```{r}
@@ -62,21 +49,48 @@ wide_data <- all_data |>
   rename(country = countryName)
   
 
-
+joined_data <- left_join(plastics, wide_data, by = c("country", "year"))
 ```
 
 ```{r}
-left_join(plastics, wide_data, by = c("country", "year"))
+
+#Check unmatched plastic rows
+plastics |>
+  anti_join(wide_data, by = c("country", "year")) |>
+  distinct(country, year)
 ```
 
 ```{r}
-url_china_hdi_2020 <- "https://api.footprintnetwork.org/v1/data/41/2020/hdi"
-res <- GET(
-  url_china_hdi_2020,
-  authenticate(user_name, api_key, type = "basic"),
-  add_headers(Accept = "application/json")
-)
 
-china_hdi_2020 <- fromJSON(rawToChar(res$content))
-china_hdi_2020
+wide_data_fixed <- wide_data |>
+  mutate(api_country = country) |>
+  mutate(
+    country = case_when(
+      country == "Côte d'Ivoire" ~ "Cote D_ivoire",
+      country == "Ecuador" & year == 2019 ~ "ECUADOR",
+      country == "Ecuador" ~ "Ecuador",
+      country == "Nigeria" & year == 2019 ~ "NIGERIA",
+      country == "Nigeria" ~ "Nigeria",
+      country == "Tanzania, United Republic of" ~ "Tanzania",
+      country == "Viet Nam" ~ "Vietnam",
+      country == "Korea, Republic of" ~ "Korea",
+      country == "Türkiye" ~ "Turkey",
+      country == "United Kingdom" & year == 2020 ~ "United Kingdom of Great Britain & Northern Ireland",
+      country == "United Kingdom" ~ "United Kingdom",
+      country == "China Hong Kong SAR" ~ "Hong Kong",
+      country == "Taiwan" ~ "Taiwan_ Republic of China (ROC)",
+      TRUE ~ country
+    )
+  )
+
+final_merged <- plastics |>
+  left_join(wide_data_fixed, by = c("country", "year"))
+
+plastics |>
+  anti_join(wide_data_fixed, by = c("country", "year")) |>
+  distinct(country, year)
+```
+
+```{r}
+
 ```
