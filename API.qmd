@@ -6,6 +6,7 @@ editor: visual
 
 ```{r}
 library(httr)
+library(tidyjson)
 library(jsonlite)
 plastics <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2021/2021-01-26/plastics.csv')
 
@@ -91,6 +92,138 @@ plastics |>
   distinct(country, year)
 ```
 
+## Data Summary
+
 ```{r}
 
+library(gt)
+
+summary_country_year <- final_merged |>
+  group_by(country, year) |>
+  summarise(
+    total_plastic = sum(grand_total),
+    avg_plastic = mean(grand_total),
+    footprint_per_capita = first(EFConsPerCap[!is.na(EFConsPerCap)]),
+    biocapacity_per_capita = first(BiocapPerCap[!is.na(BiocapPerCap)]),
+    hdi = first(HDI[!is.na(HDI)]),
+    population = first(Population[!is.na(Population)]),
+    .groups = "drop"
+  )
+
+summary_country_year |>
+  gt() |>
+  tab_header(
+    title = "Country-Year Summary of Plastics and Environmental Data"
+  ) |>
+  cols_label(
+    country = "Country",
+    year = "Year",
+    total_plastic = "Total Plastic Items Collected",
+    avg_plastic = "Average Plastic Items Collected",
+    avg_footprint = "Ecological Footprint per Capita",
+    avg_biocapacity = "Biocapacity per Capita",
+    avg_hdi = "HDI",
+    total_population = "Population"
+  ) |>
+  fmt_number(
+    columns = c(total_plastic, avg_plastic, total_population),
+    decimals = 0
+  ) |>
+  fmt_number(
+    columns = c(avg_footprint, avg_biocapacity, avg_hdi),
+    decimals = 2
+  )
+```
+
+This data set is countries and territories in Global Footprint Network’s National Footprint and Biocapacity Accounts. The data is from the Footprint Network Open Data Platform, which reports nation level results and lets users compare countries on metrics such as Total Biocapacity and Total Ecological Footprint. The data is from 1961 to the present. The data is meant to show if places live within their ecological means or not by comparing ecological demand, measured by Ecological Footprint, against ecological supply. The platform presents this data through an interactive country trends that let users select indicators and countries to explore changes over time.
+
+# Check in 3
+
+```{r}
+plastics_clean <- plastics |> 
+  mutate(across(empty:pvc, ~replace_na(., 0)),
+         total = rowSums(across(c(empty:pvc))),
+         .before = num_events)
+plastics_clean|> 
+  filter(grand_total != total)
+plastics_clean3 <- plastics_clean |> 
+  mutate(country = str_to_title(country),
+         country = str_squish(country),
+country = case_when(
+    country == "Taiwan_ Republic Of China (Roc)" ~ "Taiwan",
+    country == "United Kingdom Of Great Britain & Northern Ireland" ~ "Northern Ireland",
+    country == "Cote D_ivoire" ~ "Cote D'ivoire",
+    country == "United States Of America" ~ "United States",
+    TRUE ~ country
+))
+
+test_list <- unique(plastics_clean3$country) |> 
+  as.list()
+
+test_list2 <- unique(plastics_clean$country)
+
+```
+
+```{r}
+key = "opQBtqw8M0FwKIxA9A4BiTvqac33H2mGRxQLC7rV"
+mining2 <- function(country){
+
+  url <- str_c("https://api.api-ninjas.com/v1/country?name=",
+               URLencode(country))
+
+  res <- GET(
+    url = url,
+    add_headers("X-Api-Key" = key)
+  )
+
+  rawToChar(res$content) |>
+    as.tbl_json() |>
+    gather_array() |>
+    spread_all() |>
+    mutate(input_country = country) |>
+    as_tibble() 
+}
+```
+
+```{r}
+safe_mining <- possibly(mining2, otherwise = tibble())
+
+
+result <- map(test_list2, safe_mining) |>
+  bind_rows(.id = "id")|>
+  mutate(across(everything(), as.character))
+```
+
+```{r}
+result 
+```
+
+```{r}
+final <- plastics_clean |>
+  left_join(result, by = c("country" = "input_country"))
+```
+
+```{r}
+colnames(final)
+```
+
+```{r}
+final |> 
+  select(country:volunteers, gdp, imports, pop_density, population, employment_industry,employment_agriculture, employment_services) |> 
+  mutate(across(gdp:employment_services, as.numeric)) |> 
+  group_by(country) |> 
+  summarise(total_waste = sum(total),
+            industry = mean(employment_industry),
+            service = mean(employment_services),
+            ag = mean(employment_agriculture),
+            .groups = "drop") |> 
+  gt() |> 
+  tab_style(style = cell_text(weight = "bold"),
+            locations = cells_column_labels()) |>
+  tab_caption("Waste Compareed to Employment Sectorization") |>
+  cols_label(country = "Country", 
+             total_waste = "Total Count of Plastics",
+             industry = "Percent of Employment in Industry Sector",
+             service = "Percent of Employment in Service Sector",
+             ag = "Percent of Employment in Agriculture Sector")
 ```
