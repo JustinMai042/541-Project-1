@@ -42,6 +42,8 @@ The dot's size could also be different sizes depending on how many companies are
 
 ![](images/clipboard-2837951265.png)
 
+plastics \<- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2021/2021-01-26/plastics.csv')
+
 ```{r, include=FALSE}
 #
 library(tidyverse)

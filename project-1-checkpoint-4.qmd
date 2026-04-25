@@ -1,0 +1,677 @@
+---
+title: "project-1-checkpoint-3"
+format: html
+editor: visual
+---
+
+# Environmental Plastic
+
+# Check in 1: Exploring the data and Generating Research Questions
+
+### (used Johnathan's check in for context due to my first check in being different)
+
+## Context of the Data
+
+This was a data frame with information on plastic pollution. It was originally collected by the Break Free From Plastic (BFFP) group. They are an environmental activist with an interest in reducing the amount of plastic waste in the world. They focus on reducing the use of single use plastics and other actions across the entire life cycle of plastics. They believe that the best way to address plastic pollution comes from prevention over treating the effects of pollution. The data is two years (2019 and 2020) worth of data collected through global audits that BFFP does trying to understand the sources of plastic waste creation. The information provided by the data set is the country, parent company which created the plastic waste, the number of clean up events and volunteers, and the counts of plastic waste. This was unit-less so I am assuming individual plastic pieces collected at the event. There was a grand total count and multiple columns representing the different types of plastics ranging from the thin material of bags to PVC pipe plastic. Each row seems to represent a country and company combination. There are over 10,000 rows of data.
+
+## Cleaning Already Performed on Data
+
+This data was originally found in multiple folders one each for the years 2019 and 2020. Each folder then had a separate csv file for each country. jonthegeek used map_dfr to combine all the csv files into a single data frame. This function also changed the data types. All were turned into doubles as they were numbers except for the country and parent company as these were characters. He then added a year column as the ideas was to eventually combine the two years together. After cleaning up the names with janitor he did the same thing to the 2020 data. This one had some duplicate columns so he used an if_else function to take care of that. Finally the two years were bound together and some names were changed to make it easier to work with and we now have the data set we will be using.
+
+## Possible Research Questions
+
+### Assessed using the data
+
+-   We could ask if there was a change in the generation of plastic waste from one year to another. This can be looked at both by country and by parent company. We can see in what direction progress is going by looking at this data
+
+-   We could look at the number of counting events and volunteers across the countries. This, along with the waste information can help us look at the impact of volunteer work. Maybe the difference in plastic waste could be correlated to the amount of volunteers and events dedicated to clean up.
+
+### Assessed using supplemental data
+
+-   We could ask if the type of plastic being used in the country depends on how developed the country is. Maybe some plastic is cheaper to produce and used in higher proportions in countries with less money. This matters because some plastics may be more harmful to the environment and keeping track of it would be important
+
+-   We could explore the amount of waste created by companies and see if they have environmentally friendly production practices and see if that makes a difference. This could help determine the impact that said practices and policies have on the creation of plastic pollution
+
+## Possible Visualizations
+
+![](images/clipboard-1100353581.png)
+
+The dot's size could also be different sizes depending on how many companies are producing plastic waste in it.
+
+![](images/clipboard-2837951265.png)
+
+plastics \<- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2021/2021-01-26/plastics.csv')
+
+```{r, include=FALSE}
+#
+library(tidyverse)
+library(gt)
+
+plastics <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2021/2021-01-26/plastics.csv')
+
+```
+
+# Check in 2: Initial Data Manipulation Functions
+
+```{r}
+plastics |> 
+  summary()
+
+```
+
+## Cleaning up NA Values
+
+```{r}
+plastics_clean <- plastics |> 
+  mutate(across(empty:pvc, ~replace_na(., 0)),
+         total = rowSums(across(c(empty:pvc))),
+         .before = num_events)
+```
+
+To address the NA values present in our data our group decided to turn any NA within the plastic type columns into a zero. The rationale being that when being filled out if there were no counts of a certain type some would input a 0 and others would leave the cell empty on a spreadsheet. To address NAs in the grand totals we summed the counts of the different type of plastics and found that only two discrepancies were found shown below.
+
+```{r}
+plastics_clean|> 
+  filter(grand_total != total)
+```
+
+## Summaries using unmodified columns
+
+Two data summaries that use existing (unmodified) columns in the data At least one of these summaries need to be produced with a custom function. At least one of these summaries need to include iteration (either inside or outside of a function).
+
+### Plastic Cleanup Profile by Country and Year (Custom Function)
+
+```{r}
+
+
+country_profile <- function(data, group_var1, group_var2, min_audits = 10) {
+  data |>
+    filter(!is.na(country), country != "EMPTY") |>
+    group_by({{ group_var1 }}, {{ group_var2 }}) |>
+    summarise(
+      audits = n(),
+      total_pieces = sum(total),
+      median_pieces = median(total),
+      mean_pieces = mean(total),
+      max_pieces = max(total),
+      .groups = "drop"
+    ) |>
+    filter(audits >= min_audits) |>
+    arrange({{ group_var1 }}, {{ group_var2 }}) |>
+    gt() |>
+    tab_header(
+      title = md(
+        paste0(
+          "**Table.** Plastic cleanup profile by country and year for countries with at     least ",
+           min_audits,
+          " audits."
+        )
+      )
+  ) |>
+  fmt_number(
+    columns = c(audits, total_pieces, median_pieces, mean_pieces, max_pieces),
+    decimals = 1,
+    use_seps = TRUE
+  ) |>
+  cols_label(
+    country = md("**Country**"),
+    year = md("**Year**"),
+    audits = md("**Audits**"),
+    total_pieces = md("**Total Pieces**"),
+    median_pieces = md("**Median Pieces**"),
+    mean_pieces = md("**Mean Pieces**"),
+    max_pieces = md("**Max Pieces**")
+  )
+}
+
+
+country_profile(plastics_clean, country, year, min_audits = 1) 
+```
+
+### Plastic Type Across All Audits (Iteration)
+
+```{r}
+plastic_cols <- c("hdpe", "ldpe", "o", "pet", "pp", "ps", "pvc")
+
+map_dfr(plastic_cols, function(col) {
+  tibble(
+    plastic_type = col,
+    total = sum(plastics_clean[[col]]),
+    mean = mean(plastics_clean[[col]]),
+    median = median(plastics_clean[[col]]),
+    sd = sd(plastics_clean[[col]]),
+    iqr = IQR(plastics_clean[[col]]),
+    min = min(plastics_clean[[col]]),
+    max = max(plastics_clean[[col]]),
+    audits_with_plastic_type = sum(plastics_clean[[col]] > 0),
+    percent_of_audits = mean(plastics_clean[[col]] > 0)
+  )
+}) |>
+  gt() |>
+  fmt_percent(columns = percent_of_audits, decimals = 1) |>
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels()
+  ) |>
+  tab_header("Summary statistics for each plastic type across all audits") |>
+  cols_label(
+    plastic_type = "Plastic Type",
+    total = "Total",
+    mean = "Mean",
+    median = "Median",
+    sd = "SD",
+    iqr = "IQR",
+    min = "Min",
+    max = "Max",
+    audits_with_plastic_type = "Audits With Plastic Type",
+    percent_of_audits = "Percent of Audits"
+  )
+
+```
+
+## Data Summaries Using Modified Columns
+
+Two data summaries that modify columns from the original data At least one of these summaries need to be produced with a custom function. At least one of these summaries need to include iteration (either inside or outside of a function).
+
+### Waste per Audit Summary (Custom Function)
+
+```{r}
+
+rate_ify <- function(df, numerator, denominator, name = rate){
+  stopifnot(is.data.frame(df))
+  df |>
+    mutate({{name}} := {{numerator}}/{{denominator}})
+}
+
+plastics_clean |> 
+  group_by(country,year) |> 
+  summarise(total_trash = sum(total),
+            num_events = mean(num_events),
+            .groups = "drop") |>
+  rate_ify(numerator = total_trash,
+           denominator = num_events,
+           name = avg_event_impact) |> 
+  filter(country %in% c("India",
+                        "China",
+                        "United States of America",
+                        "Indonesia", 
+                        "Nigeria")) |>
+ 
+  gt() |>
+  fmt_number(columns = avg_event_impact, drop_trailing_zeros = TRUE) |> 
+  tab_style(style = cell_text(weight = "bold"),
+            locations = cells_column_labels()) |>
+  tab_caption("Rate of Plastic Accounted per Audit for 
+              Highly Populated Countries") |>
+  cols_label(country = "Country", 
+             year = "Year",
+             total_trash = "Total Count of Plastics",
+             num_events = "Number of Audit Events",
+             avg_event_impact = "Average Waste Accounted for per Audit")
+```
+
+### Proportions of Plastics for each Country (Iteration)
+
+```{r}
+
+proportions <- function(df) {
+  
+  df |>
+    select(country:pvc) |>
+    map_if(is.numeric, ~.x / df$total) |>
+    as.data.frame() 
+  
+}
+
+plastics_clean |>
+    mutate(year = factor(year)) |>
+    group_by(country, year) |>
+    summarise(across(hdpe:total, 
+                     ~sum(.x, na.rm = TRUE)),
+              .groups = "drop") |>
+  proportions() |>
+  filter(country %in% c("India", "China", "United States of America", "Indonesia", "Nigeria")) |>
+  gt() |>
+  fmt_percent(columns = hdpe:pvc) |>
+  tab_style(style = cell_text(weight = "bold"),
+    locations = cells_column_labels()) |>
+  tab_caption("Percentage of each plastic type found in audits from highly populated countries by year") |>
+  cols_move_to_end(o) |>
+  cols_label(country = "Country", 
+             year = "Year",
+             hdpe = "HDPE",
+             ldpe = "LDPE",
+             o = "Other",
+             pet = "PET",
+             pp = "PP",
+             ps = "PS",
+             pvc = "PVC")
+
+```
+
+# Check in 3: Webscraping and Apis
+
+## API With iteration
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(gt)
+library(httr)
+library(stringr)
+library(jsonlite)
+library(tidyjson)
+
+plastics <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2021/2021-01-26/plastics.csv')
+# unused, used plastics_clean, the original to make joining with group members easier
+
+plastics_clean <- plastics |> 
+  mutate(across(empty:pvc, ~replace_na(., 0)),
+         total = rowSums(across(c(empty:pvc))),
+         .before = num_events)
+plastics_clean3 <- plastics_clean |> 
+  mutate(country = str_to_title(country),
+         country = str_squish(country),
+country = case_when(
+    country == "Taiwan_ Republic Of China (Roc)" ~ "Taiwan",
+    country == "United Kingdom Of Great Britain & Northern Ireland" ~ "Northern Ireland",
+    country == "Cote D_ivoire" ~ "Cote D'ivoire",
+    country == "United States Of America" ~ "United States",
+    TRUE ~ country
+))
+
+test_list <- unique(plastics_clean3$country) |> 
+  as.list()
+
+test_list2 <- unique(plastics_clean$country)
+
+```
+
+Key to API Use own if possible
+
+```{r}
+key <- "opQBtqw8M0FwKIxA9A4BiTvqac33H2mGRxQLC7rV"
+```
+
+### Function
+
+```{r}
+
+mining2 <- function(country){
+
+  url <- str_c("https://api.api-ninjas.com/v1/country?name=",
+               URLencode(country))
+
+  res <- GET(
+    url = url,
+    add_headers("X-Api-Key" = key)
+  )
+
+  rawToChar(res$content) |>
+    as.tbl_json() |>
+    gather_array() |>
+    spread_all() |>
+    mutate(input_country = country) |>
+    as_tibble() 
+}
+```
+
+Googled on how to use map if thee were requests than an API would no accept, reached: <https://stackoverflow.com/questions/50486527/how-to-use-map-with-possibly>
+
+```{r}
+safe_mining <- possibly(mining2, otherwise = tibble())
+
+
+result <- map(test_list2, safe_mining) |>
+  bind_rows(.id = "id")
+```
+
+```{r}
+result 
+```
+
+```{r}
+final <- plastics_clean |>
+  left_join(result, by = c("country" = "input_country"))
+```
+
+```{r}
+colnames(final)
+```
+
+### Joing with the rest of the data and Data Summary
+
+```{r}
+final |> 
+  select(country:volunteers, gdp, imports, pop_density, population, employment_industry,employment_agriculture, employment_services) |>
+  group_by(country) |> 
+  summarise(total_waste = sum(total),
+            industry = mean(employment_industry),
+            service = mean(employment_services),
+            ag = mean(employment_agriculture),
+            .groups = "drop") |>
+  mutate(
+    largest_sector = case_when(
+      industry >= service & industry >= ag ~ "Industry",
+      service >= industry & service >= ag ~ "Service",
+      ag >= industry & ag >= service ~ "Agriculture"),
+    .after = total_waste ) |> 
+  gt() |> 
+  tab_style(style = cell_text(weight = "bold"),
+            locations = cells_column_labels()) |>
+  tab_caption("Waste Compared to Employment Sectorization") |>
+  cols_label(country = "Country", 
+             total_waste = "Total Count of Plastics",
+             industry = "Percent of Employment in Industry Sector",
+             service = "Percent of Employment in Service Sector",
+             ag = "Percent of Employment in Agriculture Sector",
+             largest_sector = "Largest Employment Sector")
+```
+
+This API provided statistics on the countries of the world. By iterating against the countries in our data set we were able to get information on them. The API is unclear on which years the data is from and because of that we are looking at measures that we consider to be more stable at least within the years that our original data is from, 2019 and 2020. Sectors of employment is one of those fields. Other there are other interesting variables in this new data as well including but not limited to endangered species, forested area, and co2 emmissions.
+
+## API 2
+
+```{r}
+library(httr)
+library(tidyjson)
+library(jsonlite)
+plastics <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2021/2021-01-26/plastics.csv')
+
+url <- "https://api.footprintnetwork.org/v1/types"
+user_name <- "username"
+api_key <- "1gs79s099C3TboOH32857V43Bur6rQssvLHAjF9e5B0GB23I65V6"
+#checkin
+response <- GET(
+  url,
+  authenticate(user = user_name, password = api_key, type = "basic"),
+  add_headers(Accept = "application/json")
+)
+
+response
+```
+
+```{r}
+years <- c(2019, 2020)
+
+all_data <- lapply(years, function(y) {
+  url <- paste0("https://api.footprintnetwork.org/v1/data/all/", y, "/all")
+  
+  res <- GET(
+    url,
+    authenticate(user_name, api_key, type = "basic"),
+    add_headers(Accept = "application/json")
+  )
+  
+fromJSON(rawToChar(res$content))
+  }) |>
+  bind_rows()
+```
+
+```{r}
+wide_data <- all_data |>
+  select(year, countryName, isoa2, record, value) |>
+    pivot_wider(
+    names_from = record,
+    values_from = value
+    ) |>
+  rename(country = countryName)
+  
+
+joined_data <- left_join(plastics, wide_data, by = c("country", "year"))
+```
+
+```{r}
+
+#Check unmatched plastic rows
+plastics |>
+  anti_join(wide_data, by = c("country", "year")) |>
+  distinct(country, year)
+```
+
+```{r}
+#fix names
+wide_data_fixed <- wide_data |>
+  mutate(api_country = country) |>
+  mutate(
+    country = case_when(
+      country == "Côte d'Ivoire" ~ "Cote D_ivoire",
+      country == "Ecuador" & year == 2019 ~ "ECUADOR",
+      country == "Ecuador" ~ "Ecuador",
+      country == "Nigeria" & year == 2019 ~ "NIGERIA",
+      country == "Nigeria" ~ "Nigeria",
+      country == "Tanzania, United Republic of" ~ "Tanzania",
+      country == "Viet Nam" ~ "Vietnam",
+      country == "Korea, Republic of" ~ "Korea",
+      country == "Türkiye" ~ "Turkey",
+      country == "United Kingdom" & year == 2020 ~ "United Kingdom of Great Britain & Northern Ireland",
+      country == "United Kingdom" ~ "United Kingdom",
+      country == "China Hong Kong SAR" ~ "Hong Kong",
+      country == "Taiwan" ~ "Taiwan_ Republic of China (ROC)",
+      TRUE ~ country
+    )
+  )
+
+final_merged <- final |>
+  left_join(wide_data_fixed, by = c("country", "year"))
+
+#no data on these countries at all
+plastics |>
+  anti_join(wide_data_fixed, by = c("country", "year")) |>
+  distinct(country, year)
+```
+
+## Data Summary
+
+```{r}
+
+summary_country_year <- final_merged |>
+  group_by(country, year) |>
+  summarise(
+    total_plastic = sum(grand_total),
+    avg_plastic = mean(grand_total),
+    footprint_per_capita = first(EFConsPerCap[!is.na(EFConsPerCap)]),
+    biocapacity_per_capita = first(BiocapPerCap[!is.na(BiocapPerCap)]),
+    hdi = first(HDI[!is.na(HDI)]),
+    population = first(Population[!is.na(Population)]),
+    .groups = "drop"
+  )
+
+summary_country_year |>
+  gt() |>
+  tab_header(
+    title = "Country-Year Summary of Plastics and Environmental Data"
+  ) |>
+   tab_style(style = cell_text(weight = "bold"),
+            locations = cells_column_labels()) |>
+  cols_label(
+    country = "Country",
+    year = "Year",
+    total_plastic = "Total Plastic Items Collected",
+    avg_plastic = "Average Plastic Items Collected",
+    footprint_per_capita = "Ecological Footprint per Capita",
+    biocapacity_per_capita = "Biocapacity per Capita",
+    hdi = "HDI",
+    population = "Population"
+  ) |>
+  fmt_number(
+    columns = c(total_plastic, avg_plastic, population),
+    decimals = 0
+  ) |>
+  fmt_number(
+    columns = c( footprint_per_capita, biocapacity_per_capita, hdi),
+    decimals = 2
+  )
+```
+
+This dataset was obtained through the Global Footprint Network API by pulling country level data for 2019 and 2020 from the National Footprint and Biocapacity Accounts. The API returns environmental and development indicators for countries and territories, including metrics such as Total Biocapacity and Total Ecological Footprint. After retrieving the data, I combined the yearly responses, reshaped them into a country year format, and matched them to the plastics dataset using country and year. This allowed me to incorporate environmental context into the original dataset and compare plastic collection outcomes with a nations ecological state.
+
+```{r}
+# large joined metadataset
+final_merged
+
+```
+
+# Check in 4: Plots and Models
+
+Question: How do demographic and economic characteristics of countries along with their geographic location relate to differences in plastic collected during cleanup audits?
+```{r}
+library(dplyr)
+library(broom)
+library(gt)
+library(scales)
+library(car)
+
+model_df <- final_merged |>
+  group_by(country, year) |>
+  summarise(
+    total_plastic = sum(total, na.rm = TRUE),
+    Population = first(na.omit(Population)),
+    pop_density = first(na.omit(pop_density)),
+    employment_industry = first(na.omit(employment_industry)),
+    HDI = first(na.omit(HDI)),
+    gdp = first(na.omit(gdp)),
+    imports = first(na.omit(imports)),
+    infant_mortality = first(na.omit(infant_mortality)),
+    region = first(na.omit(region)),
+    .groups = "drop"
+  ) |>
+  mutate(
+    region = as.factor(region),
+    log_total_plastic = log(total_plastic)
+  ) 
+
+fit_1 <- lm(
+  log_total_plastic ~ Population + pop_density + region,
+  model_df
+)
+
+fit_2 <- lm(
+  log_total_plastic ~ Population + pop_density + employment_industry + region,
+  model_df
+)
+
+fit_3 <- lm(
+  log_total_plastic ~ Population + pop_density + HDI + region,
+  model_df
+)
+
+fit_4 <- lm(
+  log_total_plastic ~ Population + pop_density + imports + region,
+  model_df
+)
+
+fit_5 <- lm(
+  log_total_plastic ~ Population + pop_density + infant_mortality + region,
+  model_df
+)
+
+
+fit_6 <- lm(
+  log_total_plastic ~ Population + pop_density + region + gdp,
+  model_df
+)
+
+fit_7 <- lm(
+  log_total_plastic ~ Population + pop_density + region + gdp + imports,
+  model_df
+)
+
+adj_rsq <- list(
+  summary(fit_1)$adj.r.squared,
+  summary(fit_2)$adj.r.squared,
+  summary(fit_3)$adj.r.squared,
+  summary(fit_4)$adj.r.squared,
+  summary(fit_5)$adj.r.squared,
+  summary(fit_6)$adj.r.squared,
+  summary(fit_7)$adj.r.squared
+)
+
+adj_rsq
+
+
+vif_results <- list(
+  vif(fit_1),
+  vif(fit_2),
+  vif(fit_3),
+  vif(fit_4),
+  vif(fit_5),
+  vif(fit_6),
+  vif(fit_7)
+)
+
+vif_results
+
+```
+
+```{r}
+
+model_df <- final_merged |>
+  group_by(country, year) |>
+  summarise(
+    total_plastic = sum(total, na.rm = TRUE),
+    Population_millions = first(na.omit(Population)) / 1000000,
+    pop_density = first(na.omit(pop_density)),
+    gdp_billions = first(na.omit(gdp)) / 1000000000,
+    region = first(na.omit(region)),
+    .groups = "drop"
+  ) |>
+  mutate(
+    region = as.factor(region),
+    log_total_plastic = log(total_plastic)
+  ) 
+
+fit_6 <- lm(
+  log_total_plastic ~ Population_millions + pop_density + gdp_billions + region,
+  model_df
+)
+
+tbl <- tidy(fit_6, conf.int = TRUE) |>
+  mutate(
+    Predictor = dplyr::recode(term,
+      `(Intercept)` = "Intercept",
+      `Population_millions` = "Population (millions)",
+      `pop_density` = "Population Density",
+      `gdp_billions` = "GDP (billions)"
+    ),
+    Predictor = sub("^region", "Region: ", Predictor)
+  ) |>
+  select(
+    Predictor,
+    Estimate = estimate,
+    `Std. Error` = std.error,
+    `t value` = statistic,
+    `p value` = p.value,
+    `95% CI Lower` = conf.low,
+    `95% CI Upper` = conf.high
+  )
+
+tbl |>
+  gt() |>
+  tab_header(
+    title = md("**Linear Regression Predicting Logged Plastic Collected by Country, Year**"),
+    subtitle = "Response: log(total_plastic)"
+  ) |>
+  cols_label(
+    Predictor = md("**Predictor**"),
+    Estimate = md("**Estimate**"),
+    `Std. Error` = md("**Std. Error**"),
+    `t value` = md("**t value**"),
+    `p value` = md("**p value**"),
+    `95% CI Lower` = md("**95% CI Lower**"),
+    `95% CI Upper` = md("**95% CI Upper**")
+  ) |>
+  fmt_number(
+    columns = c(Estimate, `Std. Error`, `t value`, `95% CI Lower`, `95% CI Upper`),
+    decimals = 4
+  ) |>
+  fmt_number(columns = `p value`, decimals = 3) |>
+  tab_source_note(
+    source_note = md(
+       "The response variable was transformed as log(total_plastic) to meet linear regression assumptions"
+    )
+  )
+```
+
+A linear regression model was fit to examine how demographic, economic, and regional factors relate to differences in plastic collected during cleanup audits across countries and years. The model included population (in millions), population density, GDP (in billions), and regions as predictors of the log transformed plastic counts. The results show that population density is significantly associated with plastic collected (p = 0.042), indicating that more densely populated countries tend to have lower levels of plastic collected, holding the other factors constant. Regional differences were the strongest predictors, with countries in Western Asia showing significantly lower levels compared to the reference region (p = 0.001). Total population (p = 0.212) and GDP (p = 0.169) were not statistically significant, which suggests that the economic size does not explain variation in plastic collected. The results show that geographic location and population distribution are more important than economic indicators in explaining differences in plastic collected.
+
+
